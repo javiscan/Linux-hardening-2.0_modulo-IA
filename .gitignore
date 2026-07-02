@@ -1,0 +1,11 @@
+# Reportes y estado en runtime
+reports/*
+!reports/.gitkeep
+*.jsonl
+*.log
+# Backups
+*.bak
+hardening_backups_*/
+# Secretos / config local
+config/secrets.env
+.env
