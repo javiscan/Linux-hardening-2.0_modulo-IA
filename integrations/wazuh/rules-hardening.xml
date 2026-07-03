@@ -1,0 +1,21 @@
+<!--
+  (OPCIONAL) Reglas propias para el MANAGER Wazuh:
+  /var/ossec/etc/rules/local_rules.xml
+  Convierten un evento de hardening con status=fail y severity=high en una
+  alerta de nivel alto, correlacionable con las alertas de Suricata/auditd.
+-->
+<group name="hardening,posture,">
+  <rule id="100200" level="3">
+    <decoded_as>json</decoded_as>
+    <field name="framework_version">\.+</field>
+    <description>Hardening: evento de postura recibido</description>
+  </rule>
+
+  <rule id="100201" level="10">
+    <if_sid>100200</if_sid>
+    <field name="status">fail</field>
+    <field name="severity">high|critical</field>
+    <description>Hardening: control CRITICO en FAIL ($(control_id)) en $(host)</description>
+    <group>hardening_fail,</group>
+  </rule>
+</group>

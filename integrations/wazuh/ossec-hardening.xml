@@ -1,0 +1,23 @@
+<!--
+  Plantilla para el AGENTE Wazuh (/var/ossec/etc/ossec.conf)
+  Agrega estos bloques <localfile> dentro de <ossec_config> para que Wazuh
+  lea: (1) las alertas de Suricata, (2) la postura del hardening.
+  Luego: systemctl restart wazuh-agent
+-->
+
+<!-- 1) Suricata (NIDS): alertas de red en formato eve.json -->
+<localfile>
+  <log_format>json</log_format>
+  <location>/var/log/suricata/eve.json</location>
+</localfile>
+
+<!-- 2) Hardening (postura CIS): eventos emitidos por hardening_2.0+IA.sh -->
+<localfile>
+  <log_format>json</log_format>
+  <location>/opt/linux-hardening-platform/reports/*/events_*.jsonl</location>
+</localfile>
+
+<!--
+  auditd (HIDS) lo consume Wazuh de forma nativa; el Modulo 2 (logging) de la
+  plataforma ya deja las reglas CIS en /etc/audit/rules.d/. No requiere localfile.
+-->
