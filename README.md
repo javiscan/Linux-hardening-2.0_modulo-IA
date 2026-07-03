@@ -63,8 +63,8 @@ Nada más: el orquestador lo detecta solo. Los módulos previos no se modifican.
 
 ## 🧠 Roadmap de IA
 
-0. Telemetría JSON (ya). 1. Priorización determinista. 2. Resumen/recomendación con
-   LLM (`ai/summarize.sh`). 3. Reducción de FP con ML. 4. Correlación (RAG).
+0. Telemetría JSON ✅. 1. Resumen/recomendación IA (`ai/summarize.sh`) ✅. 2. Correlación
+   con Wazuh — postura x amenazas (`ai/wazuh_correlate.sh`) ✅. 3. Reducción de FP con ML. 4. Agente MCP.
    Ver `docs/ARQUITECTURA_ESCALABLE.md`.
 
 ## 📚 Documentación

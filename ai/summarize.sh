@@ -68,6 +68,15 @@ Baseline (antes): CIS ${B_CIS:-n/d}% | criticas ${B_CRIT:-n/d} | postura ${B_POS
 Hallazgos en FALLO:
 ${FAILS:-(ninguno registrado)}"
 
+# Contexto de amenazas de Wazuh (Nivel 2), si la correlacion lo genero
+THREAT_CTX="${STATE_DIR}/threat_context.txt"
+if [[ -f "$THREAT_CTX" ]]; then
+    CONTEXT="${CONTEXT}
+
+CONTEXTO DE AMENAZAS (Wazuh / Suricata):
+$(cat "$THREAT_CTX")"
+fi
+
 # ------------------------------------------------------------------------------
 # Camino 1: con IA (LLM)
 # ------------------------------------------------------------------------------
@@ -160,6 +169,11 @@ heuristic_summary() {
             echo "- No hay acciones pendientes segun el ultimo escaneo."
         fi
         echo
+        if [[ -f "${STATE_DIR}/threat_context.txt" ]]; then
+            echo "## 3b. Amenazas correlacionadas (Wazuh)"
+            grep '^-' "${STATE_DIR}/threat_context.txt" | sed 's/^-/-/'
+            echo
+        fi
         echo "## 4. Progreso (punto de inflexion)"
         echo "| Metrica | Antes | Ahora |"
         echo "|---|---|---|"

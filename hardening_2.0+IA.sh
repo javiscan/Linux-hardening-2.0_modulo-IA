@@ -275,6 +275,8 @@ run_interactive() {
             B) baseline_reset ;;
             I)
                 if [[ "$SCANNED" == true ]]; then
+                    info "Correlacionando con Wazuh (si esta configurado)..."
+                    bash "${SCRIPT_DIR}/ai/wazuh_correlate.sh" || true
                     info "Generando informe con IA..."
                     bash "${SCRIPT_DIR}/ai/summarize.sh" "${SUMMARY_FILE%.txt}.json"
                 else

@@ -190,3 +190,18 @@ El agente traduce la pregunta a consultas Wazuh, cruza con la postura y arma el 
 3. (Opcional) decoders/reglas propias para eventos de hardening en Wazuh.
 4. Más adelante: MCP Server sobre Wazuh para el agente conversacional (Nivel 3),
    que conecta con la "Modular Cybersecurity Platform" (doc `ARQUITECTURA_MCP.md`).
+
+---
+
+## 8. Estado de implementación en este repo
+
+- **Nivel 1 (resumen IA):** `ai/summarize.sh` — informe en lenguaje natural +
+  recomendaciones (con LLM Anthropic/OpenAI, o heurístico sin clave).
+- **Nivel 2 (correlación):** `ai/wazuh_correlate.sh` + `integrations/wazuh/wazuh_client.sh`
+  — cruza postura (hardening) con amenazas (Suricata/auth/CVE/SCA de Wazuh) y prioriza.
+  El resultado se inyecta al informe de IA como "Contexto de amenazas".
+- **Config:** credenciales Wazuh y de IA en `config/secrets.env` (gitignored;
+  ver `config/secrets.env.example`).
+- **Uso interactivo:** opción **`I » Resumen IA`** del menú (corre correlación + resumen).
+- **Prueba offline:** `ai/wazuh_correlate.sh --threat <archivo.json>` con un JSON
+  `{"suricata_alerts":N,"auth_failures":N,"vuln_critical":N,"sca_score":N}`.
