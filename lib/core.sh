@@ -53,3 +53,15 @@ core_set_kv() {
 }
 
 core_pkg_installed() { dpkg -s "$1" >/dev/null 2>&1; }
+
+# run_live <timeout_secs> <cmd...>
+# Ejecuta un comando MOSTRANDO su salida en vivo (verbose), con timeout de
+# seguridad para que nunca quede colgado. Devuelve el codigo de salida del cmd.
+run_live() {
+    local secs="$1"; shift
+    local runner=() buf=()
+    command -v timeout >/dev/null 2>&1 && runner=(timeout "$secs")
+    command -v stdbuf  >/dev/null 2>&1 && buf=(stdbuf -oL -eL)
+    "${runner[@]}" "${buf[@]}" "$@" 2>&1 | sed 's/^/    | /'
+    return "${PIPESTATUS[0]}"
+}
