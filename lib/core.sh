@@ -19,6 +19,7 @@ ok()    { printf '%b[ OK ]%b %s\n' "$C_GREEN" "$C_RESET" "$1"; core_log "OK: $1"
 info()  { printf '%b[INFO]%b %s\n' "$C_CYAN"  "$C_RESET" "$1"; core_log "INFO: $1"; }
 warn()  { printf '%b[WARN]%b %s\n' "$C_RED"   "$C_RESET" "$1"; core_log "WARN: $1"; }
 err()   { printf '%b[ERR ]%b %s\n' "$C_RED"   "$C_RESET" "$1" >&2; core_log "ERR: $1"; }
+note()  { printf '%b%s%b\n' "$C_WHITE" "$1" "$C_RESET"; }
 
 # ¿Estamos en un modo de solo lectura? (audit o dry-run no escriben)
 core_read_only() { [[ "$MODE" == "audit" || "$MODE" == "dry-run" ]]; }

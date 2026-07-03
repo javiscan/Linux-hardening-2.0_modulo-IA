@@ -17,9 +17,15 @@ en `legacy/`): en vez de un único archivo, ahora cada control es un módulo que
 ```bash
 git clone <tu-repo> && cd linux-hardening-platform
 sudo ./install.sh
-sudo ./hardening_2.0+IA.sh --audit                 # 1) ver estado (no toca nada)
-sudo ./hardening_2.0+IA.sh --dry-run               # 2) simular remediaciones
-sudo ./hardening_2.0+IA.sh --apply --profile server # 3) aplicar (idempotente)
+
+# MODO INTERACTIVO (recomendado): intro + escaneo + menu de modulos
+sudo ./hardening_2.0+IA.sh
+#  -> elegis un modulo por numero, o "T" para aplicar todos.
+#  -> cada modulo muestra que cambiaria, pide confirmacion y da feedback.
+
+# MODO BATCH (para cron/automatizacion):
+sudo ./hardening_2.0+IA.sh --audit                  # solo lectura
+sudo ./hardening_2.0+IA.sh --apply --profile server # aplica sin menu
 ```
 
 ## 🧩 Cómo está organizado
