@@ -142,7 +142,7 @@ scan_system() {
     baseline_capture
     report_delta
     generate_full_report
-    SCANNED=true; LAST_SCORE="$(report_score)"
+    SCANNED=true; LAST_SCORE="${R_METRICS[posture_score]:-$(report_score)}"
 }
 
 # ==============================================================================
@@ -192,7 +192,7 @@ print_menu() {
     done
 
     printf '\n%b  %s%b\n' "$C_BLUE" "$sep" "$C_RESET"
-    printf '  %bE »%b Escaneo   %bI »%b Resumen IA   %bG »%b Reporte completo   %bB »%b Baseline   %bT »%b Aplicar TODO   %bQ »%b Salir\n' \
+    printf '  %bE »%b Escaneo   %bI »%b Resumen   %bG »%b Reporte completo   %bB »%b Baseline   %bT »%b Aplicar TODO   %bQ »%b Salir\n' \
         "$C_WHITE" "$C_RESET" "$C_WHITE" "$C_RESET" "$C_WHITE" "$C_RESET" "$C_WHITE" "$C_RESET" "$C_WHITE" "$C_RESET" "$C_WHITE" "$C_RESET"
     printf '  %bA »%b Asistente IA (chat)   %bK »%b Configurar IA (proveedor + key)\n' \
         "$C_WHITE" "$C_RESET" "$C_WHITE" "$C_RESET"

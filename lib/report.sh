@@ -67,7 +67,7 @@ report_summary() {
     [[ ${#R_CRITICALS[@]} -gt 0 ]] && crit_list="${R_CRITICALS[*]}"
 
     title "RESUMEN DE SEGURIDAD - ${HOST}"
-    printf '  %bScore de postura:%b %s/100\n' "$C_WHITE" "$C_RESET" "$score"
+    printf '  %bScore interno (checklist):%b %s/100\n' "$C_WHITE" "$C_RESET" "$score"
     printf '  Controles: %b%s pass%b · %b%s fail%b · %s applied · %s skipped\n' \
         "$C_GREEN" "$R_PASS" "$C_RESET" "$C_RED" "$R_FAIL" "$C_RESET" "$R_APPLIED" "$R_SKIPPED"
     printf '  Criticos/altos abiertos: %b%s%b\n' "$C_RED" "$crit_list" "$C_RESET"
@@ -76,7 +76,7 @@ report_summary() {
     if [[ -n "${SUMMARY_FILE:-}" ]]; then
         {
             echo "==== RESUMEN DE SEGURIDAD - ${HOST} (${OS_NAME}) ===="
-            echo "Score de postura: ${score}/100"
+            echo "Score interno (checklist): ${score}/100"
             echo "Controles: ${R_PASS} pass, ${R_FAIL} fail, ${R_APPLIED} applied, ${R_SKIPPED} skipped"
             echo "Criticos/altos abiertos: ${crit_list}"
             echo "Framework: v${FRAMEWORK_VERSION} | run_id ${RUN_ID} | $(date '+%Y-%m-%d %H:%M')"
