@@ -191,8 +191,8 @@ print_menu() {
     done
 
     printf '\n%b  %s%b\n' "$C_BLUE" "$sep" "$C_RESET"
-    printf '  %bE »%b Escaneo general   %bB »%b Reiniciar baseline   %bT »%b Aplicar TODO   %bQ »%b Salir\n' \
-        "$C_WHITE" "$C_RESET" "$C_WHITE" "$C_RESET" "$C_WHITE" "$C_RESET" "$C_WHITE" "$C_RESET"
+    printf '  %bE »%b Escaneo general   %bI »%b Resumen IA   %bB »%b Reiniciar baseline   %bT »%b Aplicar TODO   %bQ »%b Salir\n' \
+        "$C_WHITE" "$C_RESET" "$C_WHITE" "$C_RESET" "$C_WHITE" "$C_RESET" "$C_WHITE" "$C_RESET" "$C_WHITE" "$C_RESET"
     printf '%b  %s%b\n' "$C_BLUE" "$sep" "$C_RESET"
 }
 
@@ -273,9 +273,17 @@ run_interactive() {
             Q) break ;;
             E) info "Escaneo general del sistema..."; scan_system; report_summary ;;
             B) baseline_reset ;;
+            I)
+                if [[ "$SCANNED" == true ]]; then
+                    info "Generando informe con IA..."
+                    bash "${SCRIPT_DIR}/ai/summarize.sh" "${SUMMARY_FILE%.txt}.json"
+                else
+                    warn "Primero hace un escaneo general (E) para tener datos que resumir."
+                fi
+                ;;
             T) apply_all_interactive ;;
             ''|*[!0-9]*)
-                [[ "${opt^^}" =~ ^[EBTQ]$ ]] || warn "Opcion no valida. Usa un numero, E, B, T o Q." ;;
+                [[ "${opt^^}" =~ ^[EIBTQ]$ ]] || warn "Opcion no valida. Usa un numero, E, I, B, T o Q." ;;
             *)
                 local idx="$((opt-1))"
                 if [[ "$idx" -ge 0 && "$idx" -lt "${#MODULE_IDS[@]}" ]]; then
