@@ -5,3 +5,5 @@ logging
 patches
 os
 edr
+cis
+vulnscan

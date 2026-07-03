@@ -137,6 +137,10 @@ scan_system() {
         MOD_FAILS["$id"]="$(( R_FAIL - before_fail ))"
         MOD_TOTAL["$id"]="$(( (R_PASS + R_FAIL) - before_tot ))"
     done
+    report_posture
+    metrics_save "${STATE_DIR:-/var/lib/hardening}/last.metrics"
+    baseline_capture
+    report_delta
     SCANNED=true; LAST_SCORE="$(report_score)"
 }
 
@@ -187,8 +191,8 @@ print_menu() {
     done
 
     printf '\n%b  %s%b\n' "$C_BLUE" "$sep" "$C_RESET"
-    printf '  %bE »%b Escaneo general      %bT »%b Aplicar TODO      %bQ »%b Salir\n' \
-        "$C_WHITE" "$C_RESET" "$C_WHITE" "$C_RESET" "$C_WHITE" "$C_RESET"
+    printf '  %bE »%b Escaneo general   %bB »%b Reiniciar baseline   %bT »%b Aplicar TODO   %bQ »%b Salir\n' \
+        "$C_WHITE" "$C_RESET" "$C_WHITE" "$C_RESET" "$C_WHITE" "$C_RESET" "$C_WHITE" "$C_RESET"
     printf '%b  %s%b\n' "$C_BLUE" "$sep" "$C_RESET"
 }
 
@@ -268,9 +272,10 @@ run_interactive() {
         case "${opt^^}" in
             Q) break ;;
             E) info "Escaneo general del sistema..."; scan_system; report_summary ;;
+            B) baseline_reset ;;
             T) apply_all_interactive ;;
             ''|*[!0-9]*)
-                [[ "${opt^^}" =~ ^[ETQ]$ ]] || warn "Opcion no valida. Usa un numero, E, T o Q." ;;
+                [[ "${opt^^}" =~ ^[EBTQ]$ ]] || warn "Opcion no valida. Usa un numero, E, B, T o Q." ;;
             *)
                 local idx="$((opt-1))"
                 if [[ "$idx" -ge 0 && "$idx" -lt "${#MODULE_IDS[@]}" ]]; then
@@ -303,6 +308,12 @@ run_batch() {
             [[ "$(type -t module_audit)" == function ]] && module_audit
         fi
     done
+    if [[ "$MODE" == "audit" ]]; then
+        report_posture
+        metrics_save "${STATE_DIR:-/var/lib/hardening}/last.metrics"
+        baseline_capture
+        report_delta
+    fi
     report_summary
     if [[ "${AI_SUMMARY_ENABLED:-false}" == true && -f "${SCRIPT_DIR}/ai/summarize.sh" ]]; then
         bash "${SCRIPT_DIR}/ai/summarize.sh" "${SUMMARY_FILE%.txt}.json" || true

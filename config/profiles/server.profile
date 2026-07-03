@@ -7,3 +7,5 @@ os
 network
 dns
 edr
+cis
+vulnscan

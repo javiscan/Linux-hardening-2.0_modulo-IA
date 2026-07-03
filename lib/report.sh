@@ -87,3 +87,107 @@ report_summary() {
             >"${SUMMARY_FILE%.txt}.json"
     fi
 }
+
+# ==============================================================================
+# Metricas de postura vs estandares (CIS) y vulnerabilidades (CVE)
+# + baseline/delta (punto de inflexion antes/despues)
+# ==============================================================================
+declare -gA R_METRICS=()
+
+# report_metric <nombre> <valor>  (ej: cis_compliance 88 | cve_critical 2)
+report_metric() {
+    local name="$1" value="$2"
+    R_METRICS["$name"]="$value"
+    local ts; ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    local json
+    json=$(printf '{"timestamp":"%s","host":"%s","type":"metric","name":"%s","value":"%s","run_id":"%s"}' \
+        "$ts" "${HOST:-unknown}" "$name" "$(_json_escape "$value")" "${RUN_ID:-0}")
+    [[ -n "${EVENTS_FILE:-}" ]] && echo "$json" >>"$EVENTS_FILE"
+    if declare -F telemetry_send >/dev/null; then telemetry_send "$json" "metric" "info" "$name"; fi
+}
+
+metrics_save() {
+    local f="$1"; mkdir -p "$(dirname "$f")" 2>/dev/null || return 0
+    : >"$f"
+    local k
+    for k in "${!R_METRICS[@]}"; do echo "${k}=${R_METRICS[$k]}" >>"$f"; done
+    echo "__timestamp=$(date '+%Y-%m-%d %H:%M')" >>"$f"
+}
+
+# metrics_load <archivo> <nombre_array_asociativo>
+metrics_load() {
+    local f="$1"; local -n _dest="$2"
+    [[ -f "$f" ]] || return 1
+    local k v
+    while IFS='=' read -r k v; do [[ -n "$k" ]] && _dest["$k"]="$v"; done <"$f"
+}
+
+baseline_capture() {
+    local dir="${STATE_DIR:-/var/lib/hardening}"
+    local bf="${dir}/baseline.metrics" lf="${dir}/last.metrics"
+    mkdir -p "$dir" 2>/dev/null
+    if [[ ! -f "$bf" && -f "$lf" ]]; then
+        cp "$lf" "$bf" 2>/dev/null && info "Baseline capturado: este es tu punto de partida."
+    fi
+}
+
+baseline_reset() {
+    local bf="${STATE_DIR:-/var/lib/hardening}/baseline.metrics"
+    rm -f "$bf" 2>/dev/null
+    info "Baseline reiniciado. El proximo escaneo sera el nuevo punto de partida."
+}
+
+# Postura contra estandares: CIS (config) + CVE (vulnerabilidades)
+report_posture() {
+    local cis="${R_METRICS[cis_compliance]:-}" est=""
+    if [[ -z "$cis" ]]; then
+        local den=$((R_PASS + R_FAIL)); cis=100
+        [[ $den -gt 0 ]] && cis=$((R_PASS * 100 / den))
+        est="  (estimado por checklist; instala OpenSCAP/Lynis o usa Wazuh SCA para % CIS oficial)"
+    fi
+    R_METRICS[cis_compliance]="$cis"
+
+    local crit="${R_METRICS[cve_critical]:-}" high="${R_METRICS[cve_high]:-}" posture cvescore
+    if [[ -n "$crit" ]]; then
+        local pen=$(( crit * 10 + ${high:-0} * 3 )); [[ $pen -gt 100 ]] && pen=100
+        cvescore=$(( 100 - pen )); R_METRICS[cve_score]="$cvescore"
+        posture=$(( (cis * 6 + cvescore * 4) / 10 ))
+    else
+        posture="$cis"
+    fi
+    R_METRICS[posture_score]="$posture"
+
+    title "POSTURA vs ESTANDARES (CIS / CVE)"
+    printf '  Cumplimiento CIS: %b%s%%%b%s\n' "$C_WHITE" "$cis" "$C_RESET" "$est"
+    if [[ -n "$crit" ]]; then
+        printf '  CVE Criticas: %b%s%b  |  CVE Altas: %s\n' "$C_RED" "$crit" "$C_RESET" "${high:-n/d}"
+    else
+        printf '  CVE: %bn/d%b  (instala trivy/openscap o usa Wazuh Vulnerability Detection)\n' "$C_CYAN" "$C_RESET"
+    fi
+    printf '  %bScore de postura (vs estandares): %s/100%b\n' "$C_WHITE" "$posture" "$C_RESET"
+}
+
+_delta_line() {
+    local label="$1" before="$2" after="$3" unit="$4" diff="?" sign=""
+    if [[ "$before" =~ ^[0-9]+$ && "$after" =~ ^[0-9]+$ ]]; then
+        diff=$((after - before)); [[ $diff -gt 0 ]] && sign="+"
+    fi
+    printf '  %-20s %s%s -> %s%s (%b%s%s%b)\n' "$label" "$before" "$unit" "$after" "$unit" \
+        "$C_WHITE" "$sign" "$diff" "$C_RESET"
+}
+
+# Punto de inflexion: compara baseline (antes) con el estado actual (despues)
+report_delta() {
+    local bf="${STATE_DIR:-/var/lib/hardening}/baseline.metrics"
+    if [[ ! -f "$bf" ]]; then
+        info "Sin baseline previo: este escaneo queda como punto de partida."
+        return 0
+    fi
+    declare -A B=(); metrics_load "$bf" B
+    title "PUNTO DE INFLEXION (antes -> despues)"
+    _delta_line "Cumplimiento CIS" "${B[cis_compliance]:-?}" "${R_METRICS[cis_compliance]:-?}" "%"
+    [[ -n "${R_METRICS[cve_critical]:-}" ]] && _delta_line "CVE Criticas" "${B[cve_critical]:-?}" "${R_METRICS[cve_critical]:-?}" ""
+    [[ -n "${R_METRICS[cve_high]:-}" ]] && _delta_line "CVE Altas" "${B[cve_high]:-?}" "${R_METRICS[cve_high]:-?}" ""
+    _delta_line "Score de postura" "${B[posture_score]:-?}" "${R_METRICS[posture_score]:-?}" ""
+    printf '  Baseline: %s   |   Ahora: %s\n' "${B[__timestamp]:-?}" "$(date '+%Y-%m-%d %H:%M')"
+}

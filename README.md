@@ -72,6 +72,7 @@ Nada más: el orquestador lo detecta solo. Los módulos previos no se modifican.
 Guías detalladas (en la carpeta `docs/` y `integrations/`):
 
 - [Arquitectura escalable del hardening](docs/ARQUITECTURA_ESCALABLE.md) — estructura, módulos, telemetría y roadmap.
+- [Benchmarks (CIS) y vulnerabilidades (CVE)](docs/BENCHMARKS_Y_VULNERABILIDADES.md) — score contra estándares oficiales y punto de inflexión antes/después.
 - [IA + Wazuh: SIEM inteligente](docs/IA_Y_WAZUH_SIEM.md) — cómo se conectan hardening, Suricata, auditd y Wazuh, y dónde entra la IA.
 - [Despliegue multi-dispositivo](docs/DESPLIEGUE_MULTIDISPOSITIVO.md) — correr en varios endpoints, descubrimiento y publicación en GitHub.
 - [Modular Cybersecurity Platform (visión)](docs/ARQUITECTURA_MCP.md) — la plataforma mayor que integra todos los módulos con IA.
