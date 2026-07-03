@@ -201,6 +201,7 @@ print_menu() {
 # ==============================================================================
 run_module_interactive() {
     local id="$1"
+    MODULE_KIND="remediate"   # default; los modulos de medicion lo cambian a "measure"
     # shellcheck source=/dev/null
     source "${MOD_FILE[$id]}"
     title "Modulo: ${MODULE_ID}  (v${MODULE_VERSION:-?}, severidad ${MODULE_SEVERITY:-?})"
@@ -214,6 +215,13 @@ run_module_interactive() {
 
     if [[ "$this_fails" -eq 0 ]]; then
         ok "Este modulo ya cumple. No hay cambios que aplicar."
+        return 0
+    fi
+
+    if [[ "${MODULE_KIND:-remediate}" == "measure" ]]; then
+        info "Modulo de MEDICION: reporta el estado real (no aplica cambios)."
+        info "Para MEJORAR: elegi el modulo correspondiente del menu (ssh, network, patches...),"
+        info "o usa la opcion 'T' del menu para aplicar TODAS las mejoras de una vez."
         return 0
     fi
 

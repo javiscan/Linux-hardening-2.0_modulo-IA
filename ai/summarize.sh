@@ -53,6 +53,13 @@ B_CIS="$(_m cis_compliance "$BASELINE")"
 B_CRIT="$(_m cve_critical "$BASELINE")"
 B_POST="$(_m posture_score "$BASELINE")"
 
+# GUARDIAN: descartar porcentajes imposibles (basura tipo "2026" de corridas viejas)
+_pctok() { [[ "$1" =~ ^[0-9]+$ ]] && (( $1 >= 0 && $1 <= 100 )); }
+_pctok "$CIS"    || CIS=""
+_pctok "$POST"   || POST=""
+_pctok "$B_CIS"  || B_CIS=""
+_pctok "$B_POST" || B_POST=""
+
 FAILS=""
 if [[ -n "$EVENTS" ]]; then
     FAILS="$(grep '"status":"fail"' "$EVENTS" 2>/dev/null \
@@ -69,6 +76,15 @@ Hallazgos en FALLO:
 ${FAILS:-(ninguno registrado)}"
 
 # Contexto de amenazas de Wazuh (Nivel 2), si la correlacion lo genero
+# Sugerencias de Lynis (si existen), acotadas para el prompt
+SUGG_FILE="$(ls -t "$OUT_DIR"/lynis_sugerencias_*.txt 2>/dev/null | head -n1)"
+if [[ -n "$SUGG_FILE" ]]; then
+    CONTEXT="${CONTEXT}
+
+SUGERENCIAS DE LYNIS (primeras 15):
+$(head -n 15 "$SUGG_FILE")"
+fi
+
 THREAT_CTX="${STATE_DIR}/threat_context.txt"
 if [[ -f "$THREAT_CTX" ]]; then
     CONTEXT="${CONTEXT}

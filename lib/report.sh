@@ -94,9 +94,21 @@ report_summary() {
 # ==============================================================================
 declare -gA R_METRICS=()
 
+# Valida que un valor sea un porcentaje plausible (0-100)
+_pct_ok() { [[ "$1" =~ ^[0-9]+$ ]] && (( $1 >= 0 && $1 <= 100 )); }
+# Valida entero no negativo (conteos)
+_int_ok() { [[ "$1" =~ ^[0-9]+$ ]]; }
+
 # report_metric <nombre> <valor>  (ej: cis_compliance 88 | cve_critical 2)
+# GUARDIAN: descarta valores imposibles (evita basura tipo "2026%" de un log).
 report_metric() {
     local name="$1" value="$2"
+    case "$name" in
+        cis_compliance|posture_score|cve_score)
+            _pct_ok "$value" || { warn "Metrica '${name}' con valor invalido (${value}); descartada."; return 0; } ;;
+        cve_critical|cve_high|lynis_warnings|lynis_suggestions|wazuh_*)
+            _int_ok "$value" || return 0 ;;
+    esac
     R_METRICS["$name"]="$value"
     local ts; ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     local json
@@ -126,6 +138,11 @@ baseline_capture() {
     local dir="${STATE_DIR:-/var/lib/hardening}"
     local bf="${dir}/baseline.metrics" lf="${dir}/last.metrics"
     mkdir -p "$dir" 2>/dev/null
+    # Auto-reparacion: si el baseline previo tiene un % invalido (dato corrupto), se descarta
+    if [[ -f "$bf" ]]; then
+        local bc; bc="$(grep -E '^cis_compliance=' "$bf" 2>/dev/null | cut -d= -f2)"
+        _pct_ok "$bc" || { rm -f "$bf"; info "Baseline previo invalido (corrupto); se recapturara limpio."; }
+    fi
     if [[ ! -f "$bf" && -f "$lf" ]]; then
         cp "$lf" "$bf" 2>/dev/null && info "Baseline capturado: este es tu punto de partida."
     fi
@@ -148,8 +165,9 @@ report_posture() {
     R_METRICS[cis_compliance]="$cis"
 
     local crit="${R_METRICS[cve_critical]:-}" high="${R_METRICS[cve_high]:-}" posture cvescore
-    if [[ -n "$crit" ]]; then
-        local pen=$(( crit * 10 + ${high:-0} * 3 )); [[ $pen -gt 100 ]] && pen=100
+    if [[ -n "$crit" || -n "$high" ]]; then
+        local c="${crit:-0}" h="${high:-0}"
+        local pen=$(( c * 10 + h * 3 )); [[ $pen -gt 100 ]] && pen=100
         cvescore=$(( 100 - pen )); R_METRICS[cve_score]="$cvescore"
         posture=$(( (cis * 6 + cvescore * 4) / 10 ))
     else
@@ -159,10 +177,10 @@ report_posture() {
 
     title "POSTURA vs ESTANDARES (CIS / CVE)"
     printf '  Cumplimiento CIS: %b%s%%%b%s\n' "$C_WHITE" "$cis" "$C_RESET" "$est"
-    if [[ -n "$crit" ]]; then
-        printf '  CVE Criticas: %b%s%b  |  CVE Altas: %s\n' "$C_RED" "$crit" "$C_RESET" "${high:-n/d}"
+    if [[ -n "$crit" || -n "$high" ]]; then
+        printf '  CVE Criticas: %b%s%b  |  CVE Altas: %s\n' "$C_RED" "${crit:-n/d}" "$C_RESET" "${high:-n/d}"
     else
-        printf '  CVE: %bn/d%b  (instala trivy/openscap o usa Wazuh Vulnerability Detection)\n' "$C_CYAN" "$C_RESET"
+        printf '  CVE: %bn/d%b  (instala trivy o usa Wazuh Vulnerability Detection)\n' "$C_CYAN" "$C_RESET"
     fi
     printf '  %bScore de postura (vs estandares): %s/100%b\n' "$C_WHITE" "$posture" "$C_RESET"
 }
@@ -184,10 +202,14 @@ report_delta() {
         return 0
     fi
     declare -A B=(); metrics_load "$bf" B
+    # Sanear baseline: descartar porcentajes imposibles (basura de corridas viejas)
+    local b_cis="${B[cis_compliance]:-}" b_post="${B[posture_score]:-}"
+    _pct_ok "$b_cis"  || b_cis="?"
+    _pct_ok "$b_post" || b_post="?"
     title "PUNTO DE INFLEXION (antes -> despues)"
-    _delta_line "Cumplimiento CIS" "${B[cis_compliance]:-?}" "${R_METRICS[cis_compliance]:-?}" "%"
+    _delta_line "Cumplimiento CIS" "$b_cis" "${R_METRICS[cis_compliance]:-?}" "%"
     [[ -n "${R_METRICS[cve_critical]:-}" ]] && _delta_line "CVE Criticas" "${B[cve_critical]:-?}" "${R_METRICS[cve_critical]:-?}" ""
     [[ -n "${R_METRICS[cve_high]:-}" ]] && _delta_line "CVE Altas" "${B[cve_high]:-?}" "${R_METRICS[cve_high]:-?}" ""
-    _delta_line "Score de postura" "${B[posture_score]:-?}" "${R_METRICS[posture_score]:-?}" ""
+    _delta_line "Score de postura" "$b_post" "${R_METRICS[posture_score]:-?}" ""
     printf '  Baseline: %s   |   Ahora: %s\n' "${B[__timestamp]:-?}" "$(date '+%Y-%m-%d %H:%M')"
 }
