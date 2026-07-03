@@ -5,23 +5,20 @@
 # ==============================================================================
 #  Framework modular, NO destructivo y preparado para IA.
 #
-#  MODO INTERACTIVO (por defecto, sin argumentos):
-#    intro -> escaneo inicial -> menu -> elegis un modulo o todos.
-#    Cada modulo: muestra que cambiaria -> pide confirmacion -> aplica -> feedback.
+#  MODO INTERACTIVO (por defecto): muestra PRIMERO el menu principal con todos
+#  los modulos. NO escanea nada automaticamente. Vos elegis:
+#    - un modulo puntual (audita -> muestra cambios -> confirmas -> feedback),
+#    - "E" para un escaneo general del sistema,
+#    - "T" para aplicar todos los modulos.
 #
-#  MODO BATCH (para cron/automatizacion):
-#    --audit | --dry-run | --apply [--profile X] [--module id] [--yes]
+#  MODO BATCH (cron): --audit | --dry-run | --apply [--profile X] [--module id]
 # ==============================================================================
 set -o pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export FRAMEWORK_VERSION; FRAMEWORK_VERSION="$(cat "${SCRIPT_DIR}/VERSION" 2>/dev/null || echo 2.0.0)"
 
-# --- Parametros ---
-MODE=""            # vacio => interactivo. audit|dry-run|apply => batch
-PROFILE=""
-ONLY_MODULE=""
-export ASSUME_YES="false"
+MODE=""; PROFILE=""; ONLY_MODULE=""; export ASSUME_YES="false"
 
 usage() {
     cat <<EOF
@@ -29,11 +26,11 @@ hardening_2.0+IA.sh v${FRAMEWORK_VERSION} - Linux Hardening Platform
 
 Uso:
   sudo ./hardening_2.0+IA.sh                 # MENU INTERACTIVO (recomendado)
-  sudo ./hardening_2.0+IA.sh --audit         # batch: solo lectura
+  sudo ./hardening_2.0+IA.sh --audit         # batch: escaneo (solo lectura)
   sudo ./hardening_2.0+IA.sh --apply [...]   # batch: aplica
 
 Opciones batch:
-  --audit | --dry-run | --apply   Modo no interactivo.
+  --audit | --dry-run | --apply
   --profile <n>   Limita a los modulos del perfil (config/profiles/<n>.profile).
   --module <id>   Ejecuta solo un modulo (ej: ssh).
   --yes           Responde 'si' a las confirmaciones.
@@ -67,7 +64,6 @@ for l in core backup state report telemetry; do source "${SCRIPT_DIR}/lib/${l}.s
 # shellcheck source=/dev/null
 [[ -f "${SCRIPT_DIR}/config/platform.conf" ]] && source "${SCRIPT_DIR}/config/platform.conf"
 
-# --- Root requerido ---
 if [[ "${EUID}" -ne 0 ]]; then err "Ejecutar como root: sudo ./hardening_2.0+IA.sh"; exit 1; fi
 
 # --- Contexto del host ---
@@ -79,7 +75,6 @@ if [[ -r /etc/os-release ]]; then
 fi
 export RUN_ID; RUN_ID="$(date +%s | tail -c 6)$RANDOM"; export RUN_ID="${RUN_ID:0:8}"
 
-# --- Rutas de salida ---
 REPORT_DIR="${SCRIPT_DIR}/reports/${HOST}"; mkdir -p "$REPORT_DIR"
 export EVENTS_FILE="${REPORT_DIR}/events_${RUN_ID}.jsonl"
 export SUMMARY_FILE="${REPORT_DIR}/resumen_${RUN_ID}.txt"
@@ -89,11 +84,12 @@ export BACKUP_DIR="/root/hardening_backups_$(date +%Y%m%d_%H%M)"
 state_init
 
 # ==============================================================================
-# Descubrimiento de modulos (respeta perfil, --module y config)
+# Descubrimiento de modulos (id, archivo, descripcion) respetando perfil/config
 # ==============================================================================
 declare -a MODULE_IDS=()
-declare -A MOD_FILE=() MOD_FAILS=() MOD_TOTAL=()
+declare -A MOD_FILE=() MOD_DESC=() MOD_FAILS=() MOD_TOTAL=()
 declare -a PROFILE_MODULES=()
+SCANNED=false
 
 if [[ -n "$PROFILE" && -f "${SCRIPT_DIR}/config/profiles/${PROFILE}.profile" ]]; then
     mapfile -t PROFILE_MODULES < <(grep -vE '^\s*(#|$)' "${SCRIPT_DIR}/config/profiles/${PROFILE}.profile")
@@ -112,20 +108,23 @@ _module_enabled() {
 
 discover_modules() {
     MODULE_IDS=(); shopt -s nullglob
-    local mod id
+    local mod id desc
     for mod in "${SCRIPT_DIR}"/modules/*.sh; do
         id="$(basename "$mod" .sh)"; id="${id#*-}"
         _module_enabled "$id" || continue
-        MODULE_IDS+=("$id"); MOD_FILE["$id"]="$mod"
+        # shellcheck source=/dev/null
+        source "$mod"
+        desc="sin descripcion"
+        [[ "$(type -t module_describe)" == function ]] && desc="$(module_describe)"
+        MODULE_IDS+=("$id"); MOD_FILE["$id"]="$mod"; MOD_DESC["$id"]="$desc"
     done
     shopt -u nullglob
 }
 
 # ==============================================================================
-# Escaneo inicial del sistema (audit de todos los modulos)
+# Escaneo general (audita todos los modulos, bajo demanda)
 # ==============================================================================
 scan_system() {
-    local verbose="${1:-true}"
     R_PASS=0; R_FAIL=0; R_APPLIED=0; R_SKIPPED=0; R_SCORE_NUM=0; R_SCORE_DEN=0; R_CRITICALS=()
     local id before_fail before_tot
     MODE="audit"
@@ -133,11 +132,12 @@ scan_system() {
         # shellcheck source=/dev/null
         source "${MOD_FILE[$id]}"
         before_fail="$R_FAIL"; before_tot="$((R_PASS + R_FAIL))"
-        [[ "$verbose" == true ]] && title "Escaneando: ${MODULE_ID:-$id}"
+        title "Escaneando: ${MODULE_ID:-$id}"
         [[ "$(type -t module_audit)" == function ]] && module_audit
         MOD_FAILS["$id"]="$(( R_FAIL - before_fail ))"
         MOD_TOTAL["$id"]="$(( (R_PASS + R_FAIL) - before_tot ))"
     done
+    SCANNED=true; LAST_SCORE="$(report_score)"
 }
 
 # ==============================================================================
@@ -148,39 +148,48 @@ print_intro() {
     printf '%b' "$C_BLUE"
     cat <<EOF
 
-  #############################################################
-  #         LINUX HARDENING PLATFORM  v${FRAMEWORK_VERSION}
-  #############################################################
+  ################################################################
+  #          LINUX HARDENING PLATFORM   v${FRAMEWORK_VERSION}
+  ################################################################
 EOF
     printf '%b' "$C_RESET"
-    note "  Fortalece la seguridad de este endpoint de forma MODULAR y controlada."
-    note "  Cada modulo audita el estado actual y te deja decidir si aplicar los"
-    note "  cambios. Nada se modifica sin tu confirmacion. Todo se respalda."
+    note "  Fortalecimiento MODULAR y controlado de este endpoint."
+    note "  Elegis que mejorar: nada se aplica sin tu confirmacion, y todo se respalda."
     info "Host: ${HOST}  |  OS: ${OS_NAME}  |  run_id: ${RUN_ID}"
-    note "  Modos: ejecuta un modulo puntual, o TODOS de una vez (opcion T)."
 }
 
+_menu_score() { echo "${LAST_SCORE:--}"; }
+
 print_menu() {
-    local score tot=0 fail=0 mid
-    for mid in "${MODULE_IDS[@]}"; do tot=$((tot+${MOD_TOTAL[$mid]:-0})); fail=$((fail+${MOD_FAILS[$mid]:-0})); done
-    score=100; [[ $tot -gt 0 ]] && score=$(( (tot-fail)*100/tot ))
-    printf '\n%b===== MENU DE MODULOS =====%b  (postura actual: %b%s/100%b)\n' \
-        "$C_BLUE" "$C_RESET" "$C_WHITE" "$score" "$C_RESET"
-    local i id label
+    local sep="════════════════════════════════════════════════════════════════"
+    printf '\n%b  %s%b\n' "$C_BLUE" "$sep" "$C_RESET"
+    if [[ "$SCANNED" == true ]]; then
+        printf '%b  MENU PRINCIPAL%b   (postura tras el ultimo escaneo: %b%s/100%b)\n' \
+            "$C_BLUE" "$C_RESET" "$C_WHITE" "$(_menu_score)" "$C_RESET"
+    else
+        printf '%b  MENU PRINCIPAL%b   (sin escanear: usa %bE%b para un escaneo general)\n' \
+            "$C_BLUE" "$C_RESET" "$C_WHITE" "$C_RESET"
+    fi
+    printf '%b  %s%b\n\n' "$C_BLUE" "$sep" "$C_RESET"
+
+    local i id st
     for i in "${!MODULE_IDS[@]}"; do
         id="${MODULE_IDS[$i]}"
-        local fails="${MOD_FAILS[$id]:-0}"
-        if [[ "$fails" -eq 0 ]]; then
-            label="$(printf '%b[OK]%b        cumple' "$C_GREEN" "$C_RESET")"
-        else
-            label="$(printf '%b[%s hallazgo(s)]%b a mejorar' "$C_RED" "$fails" "$C_RESET")"
+        st=""
+        if [[ "$SCANNED" == true ]]; then
+            if [[ "${MOD_FAILS[$id]:-0}" -eq 0 ]]; then
+                st="$(printf '%b[OK]%b' "$C_GREEN" "$C_RESET")"
+            else
+                st="$(printf '%b[%s a mejorar]%b' "$C_RED" "${MOD_FAILS[$id]}" "$C_RESET")"
+            fi
         fi
-        printf '  %2d) %-12s %s\n' "$((i+1))" "$id" "$label"
+        printf '  %b%2d »%b %-10s %s %s\n' "$C_WHITE" "$((i+1))" "$C_RESET" "$id" "${MOD_DESC[$id]}" "$st"
     done
-    printf '%b' "$C_WHITE"
-    note "   T) Aplicar TODOS los modulos     R) Re-escanear"
-    note "   S) Ver resumen/score             Q) Salir"
-    printf '%b' "$C_RESET"
+
+    printf '\n%b  %s%b\n' "$C_BLUE" "$sep" "$C_RESET"
+    printf '  %bE »%b Escaneo general      %bT »%b Aplicar TODO      %bQ »%b Salir\n' \
+        "$C_WHITE" "$C_RESET" "$C_WHITE" "$C_RESET" "$C_WHITE" "$C_RESET"
+    printf '%b  %s%b\n' "$C_BLUE" "$sep" "$C_RESET"
 }
 
 # ==============================================================================
@@ -193,37 +202,30 @@ run_module_interactive() {
     title "Modulo: ${MODULE_ID}  (v${MODULE_VERSION:-?}, severidad ${MODULE_SEVERITY:-?})"
     [[ "$(type -t module_describe)" == function ]] && info "$(module_describe)"
 
-    # 1) Preview: mostrar el estado actual (que esta bien y que no)
     note "  --- Estado actual (auditoria) ---"
     MODE="audit"; local before_fail="$R_FAIL" before_tot="$((R_PASS+R_FAIL))"
     module_audit
     local this_fails="$(( R_FAIL - before_fail ))"
-    MOD_FAILS["$id"]="$this_fails"
-    MOD_TOTAL["$id"]="$(( (R_PASS+R_FAIL) - before_tot ))"
+    MOD_FAILS["$id"]="$this_fails"; MOD_TOTAL["$id"]="$(( (R_PASS+R_FAIL) - before_tot ))"
 
     if [[ "$this_fails" -eq 0 ]]; then
         ok "Este modulo ya cumple. No hay cambios que aplicar."
         return 0
     fi
 
-    # 2) Visto bueno antes de aplicar
     note "  --- Que va a pasar si aplicas ---"
     info "Se remediaran los puntos en FAIL de este modulo."
-    info "Antes de tocar cualquier archivo se crea un backup con fecha en:"
-    note "    ${BACKUP_DIR}"
-    info "La operacion es idempotente: no repite ni pisa lo ya endurecido."
+    info "Se crea un backup con fecha antes de tocar nada, en: ${BACKUP_DIR}"
+    info "Es idempotente: no repite ni pisa lo ya endurecido."
 
-    # 3) Confirmar o cancelar
     MODE="apply"
     if ! core_confirm "Aplicar remediaciones del modulo '${MODULE_ID}'?"; then
         warn "Cancelado. No se aplico ningun cambio."
         return 0
     fi
 
-    # 4) Aplicar
     [[ "$(type -t module_apply)" == function ]] && module_apply
 
-    # 5) Feedback: re-auditar y actualizar estado del menu
     note "  --- Resultado (re-auditoria) ---"
     MODE="audit"; before_fail="$R_FAIL"
     module_audit
@@ -231,20 +233,17 @@ run_module_interactive() {
     if [[ "${MOD_FAILS[$id]}" -eq 0 ]]; then
         ok "Modulo '${MODULE_ID}': todos los controles en verde."
     else
-        warn "Modulo '${MODULE_ID}': quedan ${MOD_FAILS[$id]} punto(s) que requieren accion manual."
+        warn "Modulo '${MODULE_ID}': quedan ${MOD_FAILS[$id]} punto(s) por revisar manualmente."
     fi
 }
 
-# Aplicar TODOS los modulos (con un unico visto bueno global)
 apply_all_interactive() {
     title "APLICAR TODOS LOS MODULOS"
-    warn "Se aplicaran remediaciones en TODOS los modulos listados."
+    warn "Se aplicaran remediaciones en TODOS los modulos."
     info "Recomendado: manten una segunda sesion SSH abierta (SSH/firewall)."
     MODE="apply"
-    if ! core_confirm "Confirmas aplicar TODO el hardening ahora?"; then
-        warn "Cancelado."; return 0
-    fi
-    local prev="$ASSUME_YES"; ASSUME_YES="true"   # evita repreguntar por cada modulo
+    if ! core_confirm "Confirmas aplicar TODO el hardening ahora?"; then warn "Cancelado."; return 0; fi
+    local prev="$ASSUME_YES"; ASSUME_YES="true"
     local id
     for id in "${MODULE_IDS[@]}"; do
         # shellcheck source=/dev/null
@@ -254,28 +253,24 @@ apply_all_interactive() {
         MODE="apply"; [[ "$(type -t module_apply)" == function ]] && module_apply
     done
     ASSUME_YES="$prev"
-    ok "Hardening completo aplicado. Ejecuta 'R' para re-escanear y ver el nuevo score."
+    ok "Hardening completo aplicado. Usa 'E' para re-escanear y ver el nuevo score."
 }
 
 # ==============================================================================
-# Bucle interactivo
+# Bucle interactivo: MENU PRIMERO, sin escaneo automatico
 # ==============================================================================
 run_interactive() {
     print_intro
-    info "Realizando escaneo inicial del sistema..."
-    scan_system true
     local opt
     while true; do
         print_menu
-        read -r -p "$(printf '%bSelecciona una opcion: %b' "$C_WHITE" "$C_RESET")" opt
+        read -r -p "$(printf '%b  Selecciona una opcion: %b' "$C_WHITE" "$C_RESET")" opt
         case "${opt^^}" in
             Q) break ;;
+            E) info "Escaneo general del sistema..."; scan_system; report_summary ;;
             T) apply_all_interactive ;;
-            R) info "Re-escaneando..."; scan_system true ;;
-            S) scan_system true; report_summary ;;
             ''|*[!0-9]*)
-                # No es numero puro (y no fue T/R/S/Q)
-                [[ "${opt^^}" =~ ^[TRSQ]$ ]] || warn "Opcion no valida." ;;
+                [[ "${opt^^}" =~ ^[ETQ]$ ]] || warn "Opcion no valida. Usa un numero, E, T o Q." ;;
             *)
                 local idx="$((opt-1))"
                 if [[ "$idx" -ge 0 && "$idx" -lt "${#MODULE_IDS[@]}" ]]; then
@@ -286,10 +281,7 @@ run_interactive() {
                 ;;
         esac
     done
-    info "Escaneo final del sistema..."
-    scan_system true
-    report_summary
-    info "Eventos: ${EVENTS_FILE}"
+    info "Reportes en: ${REPORT_DIR}"
     ok "Hasta luego."
 }
 
@@ -323,8 +315,4 @@ run_batch() {
 discover_modules
 if [[ ${#MODULE_IDS[@]} -eq 0 ]]; then err "No se encontraron modulos habilitados."; exit 1; fi
 
-if [[ "$RUN_MODE" == "batch" ]]; then
-    run_batch
-else
-    run_interactive
-fi
+if [[ "$RUN_MODE" == "batch" ]]; then run_batch; else run_interactive; fi
