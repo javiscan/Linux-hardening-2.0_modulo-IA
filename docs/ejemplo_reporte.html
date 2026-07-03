@@ -1,0 +1,43 @@
+<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reporte Hardening - servidor-web-01</title>
+<style>
+ body{font-family:system-ui,Segoe UI,Arial,sans-serif;background:#0f1720;color:#e6edf3;margin:0;padding:24px;}
+ .wrap{max-width:960px;margin:0 auto;}
+ h1{margin:0 0 4px;} .sub{color:#8aa0b3;font-size:14px;margin-bottom:20px;}
+ h2{border-bottom:1px solid #24303c;padding-bottom:6px;margin-top:28px;color:#7fd7ff;}
+ .score{font-size:44px;font-weight:800;color:#27ae60;}
+ table{border-collapse:collapse;width:100%;margin:8px 0;}
+ th,td{border:1px solid #24303c;padding:8px 10px;text-align:left;font-size:14px;}
+ th{background:#16212c;}
+ .crit{color:#ff6b6b;font-weight:700;} .high{color:#ffa94d;} .ok{color:#51cf66;}
+ li{margin:4px 0;} code,pre{background:#0b1118;border:1px solid #24303c;border-radius:6px;}
+ pre{padding:12px;overflow:auto;font-size:12px;} .card{background:#131c26;border:1px solid #24303c;border-radius:10px;padding:16px;margin:12px 0;}
+</style></head><body><div class="wrap">
+<h1>Reporte de Hardening — servidor-web-01</h1>
+<div class="sub">Generado: 2026-07-03 16:06 · Sistema: Ubuntu 24.04 LTS · run_id: 9</div>
+<div class="card"><div>Score de postura (vs estandares)</div><div class="score">82/100</div>
+<div>Cumplimiento CIS: <b>88%</b> · CVE criticas: <b class="crit">2</b> · CVE altas: <b class="high">9</b></div>
+<div class="sub">Punto de inflexion — CIS 61% → 88% · Postura 55 → 82</div></div>
+<h2>Que tenes que hacer en tu endpoint</h2><ul>
+<li><span class="crit">[critical]</span> <b>cve_scan</b> (modulo vulnscan) — 2 criticas, 9 altas<br><i>Accion:</i> Modulo 'patches': parchear paquetes con CVE (o instalar Trivy para detalle).</li>
+<li><span class="high">[high]</span> <b>edr_present</b> (modulo edr) — ningun EDR detectado<br><i>Accion:</i> Modulo 'edr': desplegar agente Wazuh/EDR en el endpoint.</li>
+<li><span class="high">[high]</span> <b>pending_updates</b> (modulo patches) — 7 actualizaciones pendientes<br><i>Accion:</i> Modulo 'patches': apt upgrade + unattended-upgrades.</li>
+</ul><h2>Mejoras aplicadas en esta sesion</h2><ul>
+<li class="ok">ssh / ssh_root_login: root off + MaxAuthTries=3</li>
+<li class="ok">network / ufw_enabled: deny-all con SSH permitido</li>
+<li class="ok">os / sysctl_cis: 25 parametros sysctl CIS</li>
+</ul><h2>Estado por modulo</h2><table><tr><th>Modulo</th><th>Pass</th><th>Fail</th><th>Aplicados</th></tr>
+<tr><td>cis</td><td class="ok">1</td><td class="crit">0</td><td>0</td></tr>
+<tr><td>edr</td><td class="ok">0</td><td class="crit">1</td><td>0</td></tr>
+<tr><td>network</td><td class="ok">0</td><td class="crit">0</td><td>1</td></tr>
+<tr><td>os</td><td class="ok">0</td><td class="crit">0</td><td>1</td></tr>
+<tr><td>patches</td><td class="ok">0</td><td class="crit">1</td><td>0</td></tr>
+<tr><td>ssh</td><td class="ok">1</td><td class="crit">0</td><td>1</td></tr>
+<tr><td>vulnscan</td><td class="ok">0</td><td class="crit">1</td><td>0</td></tr>
+</table><h2>Historial de mejoras (ledger)</h2><ul>
+<li>ssh:root_login (v2.0.0) — 2026-07-02T10:00:00Z</li>
+<li>network:ufw (v2.0.0) — 2026-07-03T17:00:00Z</li>
+<li>os:sysctl (v2.0.0) — 2026-07-03T17:05:00Z</li>
+</ul>
+</div></body></html>

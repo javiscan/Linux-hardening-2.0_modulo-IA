@@ -59,7 +59,7 @@ if [[ -n "$MODE" || -n "$ONLY_MODULE" ]]; then RUN_MODE="batch"; else RUN_MODE="
 
 # --- Cargar librerias ---
 # shellcheck source=/dev/null
-for l in core backup state report telemetry; do source "${SCRIPT_DIR}/lib/${l}.sh"; done
+for l in core backup state report report_full telemetry; do source "${SCRIPT_DIR}/lib/${l}.sh"; done
 [[ -f "${SCRIPT_DIR}/integrations/alerts/dispatch.sh" ]] && source "${SCRIPT_DIR}/integrations/alerts/dispatch.sh"
 # shellcheck source=/dev/null
 [[ -f "${SCRIPT_DIR}/config/platform.conf" ]] && source "${SCRIPT_DIR}/config/platform.conf"
@@ -141,6 +141,7 @@ scan_system() {
     metrics_save "${STATE_DIR:-/var/lib/hardening}/last.metrics"
     baseline_capture
     report_delta
+    generate_full_report
     SCANNED=true; LAST_SCORE="$(report_score)"
 }
 
@@ -191,8 +192,10 @@ print_menu() {
     done
 
     printf '\n%b  %s%b\n' "$C_BLUE" "$sep" "$C_RESET"
-    printf '  %bE »%b Escaneo general   %bI »%b Resumen IA   %bB »%b Reiniciar baseline   %bT »%b Aplicar TODO   %bQ »%b Salir\n' \
-        "$C_WHITE" "$C_RESET" "$C_WHITE" "$C_RESET" "$C_WHITE" "$C_RESET" "$C_WHITE" "$C_RESET" "$C_WHITE" "$C_RESET"
+    printf '  %bE »%b Escaneo   %bI »%b Resumen IA   %bG »%b Reporte completo   %bB »%b Baseline   %bT »%b Aplicar TODO   %bQ »%b Salir\n' \
+        "$C_WHITE" "$C_RESET" "$C_WHITE" "$C_RESET" "$C_WHITE" "$C_RESET" "$C_WHITE" "$C_RESET" "$C_WHITE" "$C_RESET" "$C_WHITE" "$C_RESET"
+    printf '  %bA »%b Asistente IA (chat)   %bK »%b Configurar IA (proveedor + key)\n' \
+        "$C_WHITE" "$C_RESET" "$C_WHITE" "$C_RESET"
     printf '%b  %s%b\n' "$C_BLUE" "$sep" "$C_RESET"
 }
 
@@ -281,6 +284,15 @@ run_interactive() {
             Q) break ;;
             E) info "Escaneo general del sistema..."; scan_system; report_summary ;;
             B) baseline_reset ;;
+            G)
+                if [[ "$SCANNED" == true ]]; then generate_full_report; else warn "Primero hace un escaneo general (E)."; fi
+                ;;
+            A) bash "${SCRIPT_DIR}/ai/assistant.sh" ;;
+            K)
+                bash "${SCRIPT_DIR}/ai/setup_ai.sh"
+                # shellcheck source=/dev/null
+                [[ -f "${SCRIPT_DIR}/config/secrets.env" ]] && source "${SCRIPT_DIR}/config/secrets.env"
+                ;;
             I)
                 if [[ "$SCANNED" == true ]]; then
                     info "Correlacionando con Wazuh (si esta configurado)..."
@@ -293,7 +305,7 @@ run_interactive() {
                 ;;
             T) apply_all_interactive ;;
             ''|*[!0-9]*)
-                [[ "${opt^^}" =~ ^[EIBTQ]$ ]] || warn "Opcion no valida. Usa un numero, E, I, B, T o Q." ;;
+                [[ "${opt^^}" =~ ^[EIGBTQAK]$ ]] || warn "Opcion no valida. Usa un numero, E, I, G, B, T, A, K o Q." ;;
             *)
                 local idx="$((opt-1))"
                 if [[ "$idx" -ge 0 && "$idx" -lt "${#MODULE_IDS[@]}" ]]; then
@@ -333,6 +345,7 @@ run_batch() {
         report_delta
     fi
     report_summary
+    generate_full_report
     if [[ "${AI_SUMMARY_ENABLED:-false}" == true && -f "${SCRIPT_DIR}/ai/summarize.sh" ]]; then
         bash "${SCRIPT_DIR}/ai/summarize.sh" "${SUMMARY_FILE%.txt}.json" || true
     fi

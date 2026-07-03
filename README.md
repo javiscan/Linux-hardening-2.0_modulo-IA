@@ -54,12 +54,37 @@ module_apply()    { state_is_version "$MODULE_ID:x" "$MODULE_VERSION" || { backu
 
 Nada más: el orquestador lo detecta solo. Los módulos previos no se modifican.
 
+## 📊 Reporte consolidado
+
+Cada escaneo (`E`) o la opcion **`G » Reporte completo`** genera en `reports/<host>/`:
+
+- `reporte_completo_<runid>.md` y `reporte_completo_<runid>.html` (abrir en navegador).
+
+Incluye: score de postura, punto de inflexion (antes/despues), **plan de accion
+(que hacer en el endpoint)**, mejoras aplicadas en la sesion, estado por modulo e
+historial de mejoras (ledger). Hay un ejemplo en `docs/ejemplo_reporte.html`.
+
 ## 📡 Telemetría y alertas
 
 - Cada evento se escribe como JSON (`reports/<host>/events_*.jsonl`) y se envía al
   destino configurado en `platform.conf` (Splunk HEC, ELK HTTP, syslog/CEF).
 - Alertas por severidad y canal (Telegram/email/…), con dedupe anti-ruido.
 - El módulo **no** sabe a qué SIEM va: se cambia en config, no en código.
+
+## 🤖 Asistente IA (chat)
+
+Elegis tu proveedor de IA y chateas con un asistente que ya conoce el estado de tu
+endpoint (postura, hallazgos, plan de accion).
+
+```bash
+./ai/setup_ai.sh     # elegi proveedor (Claude/OpenAI/Gemini/Ollama/custom) + API key
+./ai/assistant.sh    # abri el chat en una terminal (o usa la opcion A del menu)
+```
+
+- La API key se guarda en `config/secrets.env` (gitignored; nunca se sube).
+- Proveedores soportados: Anthropic, OpenAI, Google Gemini, Ollama (local, sin key)
+  y cualquier endpoint OpenAI-compatible.
+- Comandos del chat: `/contexto` (recargar estado), `/reset`, `/salir`.
 
 ## 🧠 Roadmap de IA
 
